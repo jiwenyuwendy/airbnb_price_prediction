@@ -1,0 +1,92 @@
+---
+title: "Comp"
+author: "Wenyu Ji"
+date: "10/25/2021"
+output: html_document
+---
+
+```{r}
+setwd('/Users/wenyuji/Desktop/5200/project_airbnb')
+#install.packages("randomForest")
+```
+
+```{r}
+# For the following code to work, ensure analysisData.csv and scoringData.csv are in your working directory.
+
+# Read data and construct a simple model
+
+data = read.csv('analysisData.csv',stringsAsFactors = F)
+#Check NAs.
+
+num.NA = sort(sapply(data, function(x) { sum(is.na(x))} ))
+num.NA[which(num.NA!=0)]
+
+#Eliminate attributes with more than 80% NAs.
+
+remain.col = names(num.NA[which(num.NA<0.8*dim(data)[1])])
+data.sub = data[,remain.col]
+NA.new = sort(sapply(data.sub, function(x) { sum(is.na(x))} ))
+NA.new[which(NA.new!=0)]
+
+#Fill remaining NAs with medians.
+
+data.sub$cleaning_fee[which(is.na(data.sub$cleaning_fee))] = median(data.sub$cleaning_fee,na.rm=T)
+data.sub$beds[which(is.na(data.sub$beds))] = median(data.sub$beds,na.rm=T)
+data.sub$security_deposit[which(is.na(data.sub$security_deposit))] = median(data.sub$security_deposit,na.rm=T)
+data.sub$host_total_listings_count[which(is.na(data.sub$host_total_listings_count))] = median(data.sub$host_total_listings_count,na.rm=T)
+data.sub$host_listings_count[which(is.na(data.sub$host_listings_count))] = median(data.sub$host_listings_count,na.rm=T)
+data.sub$reviews_per_month[which(is.na(data.sub$reviews_per_month))] = median(data.sub$reviews_per_month,na.rm=T)
+data.sub$interaction[which(is.na(data.sub$interaction))] = median(data.sub$interaction,na.rm=T)
+data.sub$accommodates[which(is.na(data.sub$accommodates))] = median(data.sub$accommodates,na.rm=T)
+data.sub$bedrooms[which(is.na(data.sub$bedrooms))] = median(data.sub$bedrooms,na.rm=T)
+data.sub$guests_included[which(is.na(data.sub$guests_included))] = median(data.sub$guests_included,na.rm=T)
+data.sub$accommodates[is.na(data.sub$accommodates)] <- mean(data.sub$accommodates, na.rm = TRUE)
+data.sub$bedrooms[is.na(data.sub$bedrooms)] <- mean(data.sub$bedrooms, na.rm = TRUE)
+data.sub$cleaning_fee[is.na(data.sub$cleaning_fee)] <- mean(data.sub$cleaning_fee, na.rm = TRUE)
+data.sub$guests_included[is.na(data.sub$guests_included)] <- mean(data.sub$guests_included, na.rm = TRUE)
+
+```
+
+#Alternative:
+#library(caTools)
+#set.seed(1234)
+#split = sample.split(Y = data.sub$price, SplitRatio = 0.7)
+#table(split)
+#train_CA = data.sub[split,]
+#test_CA = data.sub[!split,]
+
+#rm(test,train,test_try,train_try)
+```{r}
+set.seed(617)
+split = sample(1:nrow(data.sub),size = nrow(data.sub)*0.7)
+train = data.sub[split,]
+test = data.sub[-split,]
+```
+
+```{r}
+library(randomForest)
+set.seed(617)
+forest = randomForest(price~accommodates+bedrooms+cleaning_fee+guests_included,data=train,ntree = 1000)
+pred = predict(forest,newdata=test)
+rmse_forest = sqrt(mean((pred-test$price)^2)); rmse_forest
+
+```
+
+```{r}
+# Read scoring data and apply model to generate predictions
+scoringData = read.csv('scoringData.csv')
+pred = predict(forest,newdata=scoringData)
+```
+
+```{r}
+# Construct submission from predictions
+submissionFile = data.frame(id = scoringData$id, price = pred)
+write.csv(submissionFile, 'randomForest_submission.csv',row.names = F)
+```
+
+
+
+
+
+
+

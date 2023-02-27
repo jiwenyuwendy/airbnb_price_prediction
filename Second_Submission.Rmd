@@ -1,0 +1,259 @@
+---
+title: "Comp"
+author: "Wenyu Ji"
+date: "10/25/2021"
+output: html_document
+---
+
+```{r}
+setwd('/Users/wenyuji/Desktop/5200/project_airbnb')
+#install.packages("randomForest")
+install.packages("vtreat")
+install.packages("wrapr")
+install.packages("gbm")
+install.packages("dplyr")
+install.packages("tidyr")
+install.packages("ggplot2")
+install.packages("ggcorrplot")
+
+```
+
+```{r}
+# For the following code to work, ensure analysisData.csv and scoringData.csv are in your working directory.
+
+# Read data and construct a simple model
+data = read.csv('analysisData.csv')
+
+
+#Understanding choose attriute
+```
+
+```{r}
+
+data_missing = data
+for(i in 1:35){
+  set.seed(i)
+  x = sample(1:nrow(data), 1)
+  y = sample(1:ncol(data), 1)
+  data_missing[x, y] = NA
+}
+data_missing
+
+apply(data_missing,
+      MARGIN = 2, 
+      FUN = function(x) sum(is.na(x)))
+```
+
+```{r}
+#Check NAs.
+
+num.NA = (sapply(data, function(x) sum(is.na(x))))
+num.NA[which(num.NA!=0)]
+
+
+
+
+```
+
+```{r}
+#Eliminate attributes with more than 80% NAs.more than 30% NA do not use it
+
+remain.col = names(num.NA[which(num.NA<0.8*dim(data)[1])])
+data.sub = data[,remain.col]
+NA.new = sapply(data.sub, function(x) { sum(is.na(x))} ) 
+NA.new[which(NA.new!=0)]
+
+
+sum(is.na(data.sub))/nrow(data.sub)*ncol(data.sub)
+
+
+```
+
+```{r}
+
+#Fill remaining NAs with medians.
+
+#data.sub$interaction[is.na(data.sub$interaction)] <- mean(data.sub$interaction, na.rm = TRUE)
+data.sub$reviews_per_month[is.na(data.sub$reviews_per_month)] <- mean(data.sub$reviews_per_month, na.rm = TRUE)
+data.sub$host_listings_count[is.na(data.sub$host_listings_count)] <- mean(data.sub$host_listings_count, na.rm = TRUE)
+data.sub$host_total_listings_count[is.na(data.sub$host_total_listings_count)] <- mean(data.sub$host_total_listings_count, na.rm = TRUE)
+data.sub$beds[is.na(data.sub$beds)] <- mean(data.sub$beds, na.rm = TRUE)
+data.sub$cleaning_fee[is.na(data.sub$cleaning_fee)] <- mean(data.sub$cleaning_fee, na.rm = TRUE)
+data.sub$security_deposit[is.na(data.sub$security_deposit)] <- mean(data.sub$security_deposit, na.rm = TRUE)
+
+```
+
+```{r}
+#Cancellation_policy
+table(data.sub$cancellation_policy)
+data.sub$cancellation_policy[which(data.sub$cancellation_policy=='flexible')] = 1
+data.sub$cancellation_policy[which(data.sub$cancellation_policy=='flexible')] = 1
+
+data.sub$cancellation_policy[which(data.sub$cancellation_policy=='flexible')] = 1
+data.sub$cancellation_policy[which(data.sub$cancellation_policy=='moderate')] = 2
+data.sub$cancellation_policy[which(data.sub$cancellation_policy=='strict')] = 3
+data.sub$cancellation_policy[which(data.sub$cancellation_policy=='strict_14_with_grace_period')] = 4
+data.sub$cancellation_policy[which(data.sub$cancellation_policy=='super_strict_30')] = 5
+data.sub$cancellation_policy[which(data.sub$cancellation_policy=='super_strict_60')] = 6
+
+```
+
+```{r}
+#‘host_is_superhost’, ‘host_has_profile_pic’, ‘instant_bookable’ 'is_location_excat''requires_license'to (1=TRUE, 0=FALSE)
+data.sub$host_is_superhost[which(data.sub$host_is_superhost=='f')] = 0
+data.sub$host_is_superhost[which(data.sub$host_is_superhost=='t')] = 1
+data.sub$host_has_profile_pic[which(data.sub$host_has_profile_pic=='f')] = 0
+data.sub$host_has_profile_pic[which(data.sub$host_has_profile_pic=='t')] = 1
+data.sub$instant_bookable[which(data.sub$instant_bookable=='f')] = 0
+data.sub$instant_bookable[which(data.sub$instant_bookable=='t')] = 1
+data.sub$is_location_exact[which(data.sub$is_location_exact=='f')] = 0
+data.sub$is_location_exact[which(data.sub$is_location_exact=='t')] = 1
+data.sub$requires_license[which(data.sub$requires_license=='f')] = 0
+data.sub$requires_license[which(data.sub$requires_license=='t')] = 1
+
+
+```
+
+```{r}
+#‘room_type’, ‘neighbourhood_group_cleansed’, ‘instant_bookable’ to 
+data.sub$room_type[which(data.sub$room_type=='Private room')] = 1
+data.sub$room_type[which(data.sub$room_type=='Shared room')] = 2
+data.sub$room_type[which(data.sub$room_type=='Hotel room')] = 3
+data.sub$room_type[which(data.sub$room_type=='Entire home. room')] = 4
+
+
+data.sub$neighbourhood_group_cleansed[which(data.sub$neighbourhood_group_cleansed=='Bronx')] = 1
+data.sub$neighbourhood_group_cleansed[which(data.sub$neighbourhood_group_cleansed=='Brooklyn')] = 2
+data.sub$neighbourhood_group_cleansed[which(data.sub$neighbourhood_group_cleansed=='Manhattan')] = 3
+data.sub$neighbourhood_group_cleansed[which(data.sub$neighbourhood_group_cleansed=='Queens')] = 4
+data.sub$neighbourhood_group_cleansed[which(data.sub$neighbourhood_group_cleansed=='Staten Island')] = 5
+
+
+
+```
+
+```{r}
+
+#amenity
+data.sub$wifi = 0
+data.sub$wifi[which((grepl("Wifi", data.sub$amenities)==T) | (grepl("Internet", data.sub
+$amenities)==T))] = 1
+data.sub$heat = 0
+data.sub$heat[which(grepl("Heating", data.sub$amenities)==T)] = 1
+data.sub$air = 0
+data.sub$air[which(grepl("Air conditioning", data.sub$amenities)==T)] = 1
+data.sub$kitcken = 0
+data.sub$kitcken[which(grepl("Kitchen", data.sub$amenities)==T)] = 1
+data.sub$shampoo = 0
+data.sub$shampoo[which(grepl("Shampoo", data.sub$amenities)==T)] = 1
+data.sub$essential = 0
+data.sub$essential[which(grepl("Essentials", data.sub$amenities)==T)] = 1
+data.sub$elevator = 0
+data.sub$elevator[which(grepl("Elevator", data.sub$amenities)==T)] = 1
+data.sub$tv = 0
+data.sub$tv[which((grepl("TV", data.sub$amenities)==T) | (grepl("Cable TV", data.sub$amenities)==T))] = 1
+data.sub$gym = 0
+data.sub$gym[which(grepl("Gym", data.sub$amenities)==T)] = 1
+data.sub$washer = 0
+data.sub$washer[which(grepl("Washer", data.sub$amenities)==T)] = 1
+data.sub$dryer = 0
+data.sub$dryer[which(grepl("Dryer", data.sub$amenities)==T)] = 1
+data.sub$fridge = 0
+data.sub$fridge[which(grepl("Refrigerator", data.sub$amenities)==T)] = 1
+data.sub$self_check = 0
+data.sub$self_check[which(grepl("Self check-in", data.sub$amenities)==T)] = 1
+data.sub$hair = 0
+data.sub$hair[which(grepl("Hair dryer", data.sub$amenities)==T)] = 1
+data.sub$smart = 0
+data.sub$smart[which(grepl("Smart lock", data.sub$amenities)==T)] = 1
+data.sub$aid = 0
+data.sub$aid[which(grepl("First aid kit", data.sub$amenities)==T)] = 1
+data.sub$hanger = 0
+data.sub$hanger[which(grepl("Hangers", data.sub$amenities)==T)] = 1
+data.sub$co = 0
+data.sub$co[which(grepl("Carbon monoxide detector", data.sub$amenities)==T)] = 1
+```
+
+#Alternative:
+#library(caTools)
+#set.seed(1234)
+#split = sample.split(Y = data.sub$price, SplitRatio = 0.7)
+#table(split)
+#train_CA = data.sub[split,]
+#test_CA = data.sub[!split,]
+
+#rm(test,train,test_try,train_try)
+```{r}
+
+set.seed(617)
+split = sample(1:nrow(data.sub),size = nrow(data.sub)*0.7)
+train = data.sub[split,]
+test = data.sub[-split,]
+```
+
+```{r}
+
+lm = lm(price~amenities,data=train)
+summary(lm)
+```
+```{r}
+sapply(data, is.numeric)
+data_num <- data[, sapply(data, is.numeric)]
+library(ggcorrplot)
+ggcorrplot(cor(data_num),
+           method = 'square',
+           type = 'lower',
+           show.diag = F,
+           colors = c('#e9a3c9', '#f7f7f7', '#a1d76a'))
+
+library(tidyr); library(dplyr); library(ggplot2)
+corMatrix = as.data.frame(cor(data_num[,-12]))
+corMatrix$var1 = rownames(corMatrix)
+
+corMatrix %>%
+  gather(key=var2,value=r,1:11)%>%
+  arrange(var1,desc(var2))%>%
+  ggplot(aes(x=var1,y=reorder(var2, order(var2,decreasing=F)),fill=r))+
+  geom_tile()+
+  geom_text(aes(label=round(r,2)),size=3)+
+  scale_fill_gradientn(colours = c('#d7191c','#fdae61','#ffffbf','#a6d96a','#1a9641'))+
+  theme(axis.text.x=element_text(angle=75,hjust = 1))+xlab('')+ylab('')
+
+```
+
+```{r}
+lm2 = lm(price~ extra_people+guests_included+number_of_reviews+review_scores_rating+calculated_host_listings_count+review_scores_cleanliness+review_scores_communication,data=train)
+
+summary(lm2)
+#availability_60+neighbourhood+city+
+
+```
+```
+
+```{r}
+library(randomForest)
+set.seed(617)
+forest = randomForest(price~accommodates+zipcode+neighbourhood+bedrooms+guests_included+cancellation_policy+room_type+number_of_reviews+neighbourhood_group_cleansed+amenities+calculated_host_listings_count+availability_60+availability_30+review_scores_cleanliness+review_scores_communication,data=train,ntree = 1000)
+pred = predict(forest,newdata=test)
+rmse_forest = sqrt(mean((pred-test$price)^2)); rmse_forest
+```
+
+
+```{r}
+# Read scoring data and apply model to generate predictions
+scoringData = read.csv('scoringData.csv')
+pred = predict(forest,newdata=scoringData)
+```
+
+```{r}
+# Construct submission from predictions
+submissionFile = data.frame(id = scoringData$id, price = pred)
+write.csv(submissionFile, 'randomForest_submission4.csv',row.names = F)
+```
+
+
+
+
+
+
+

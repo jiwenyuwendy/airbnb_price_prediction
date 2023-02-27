@@ -1,0 +1,136 @@
+---
+title: "Comp"
+author: "Wenyu Ji"
+date: "10/25/2021"
+output: html_document
+---
+
+```{r}
+setwd('/Users/wenyuji/Desktop/5200/project_airbnb')
+install.packages("randomForest")
+install.packages("tidyverse")
+library(dplyr)
+library(tidyverse)
+```
+
+```{r}
+data = read.csv('analysisData.csv',stringsAsFactors = F)
+#subdata.
+data.sub <- select(data, -id,-name,-summary,-name,-space,-description,-neighborhood_overview,-notes,-transit,-access,-interaction,-house_rules,-host_name,-host_since,-host_has_profile_pic,-state,-market,-country,-country_code,-square_feet,-weekly_price,-monthly_price,-requires_license,-license,-jurisdiction_names,-require_guest_profile_picture,-require_guest_phone_verification,-host_location,-host_about,host_verifications,host_verifications,smart_location,-host_is_superhost,-is_business_travel_ready,host_verifications,host_identity_verified,-host_verifications,-host_identity_verified,-first_review,-last_review,-host_neighbourhood,-host_acceptance_rate,-first_review,-last_review,-has_availability,-bed_type,-is_location_exact,-smart_location,extra_people,-city,-street,-cancellation_policy)
+sort(sapply(data.sub, function(x) { sum(is.na(x))} ))
+
+
+#check NA
+sort(sapply(data.sub, function(x) { sum(is.na(x))} ))
+
+#Fill remaining NAs with medians.
+data.sub$cleaning_fee[which(is.na(data.sub$cleaning_fee))] = median(data.sub$cleaning_fee,na.rm=T)
+data.sub$beds[which(is.na(data.sub$beds))] = median(data.sub$beds,na.rm=T)
+data.sub$security_deposit[which(is.na(data.sub$security_deposit))] = median(data.sub$security_deposit,na.rm=T)
+data.sub$host_total_listings_count[which(is.na(data.sub$host_total_listings_count))] = median(data.sub$host_total_listings_count,na.rm=T)
+data.sub$host_listings_count[which(is.na(data.sub$host_listings_count))] = median(data.sub$host_listings_count,na.rm=T)
+data.sub$reviews_per_month[which(is.na(data.sub$reviews_per_month))] = median(data.sub$reviews_per_month,na.rm=T)
+summary(data.sub)
+```
+
+
+```{r}
+
+
+#check NA all clear
+sort(sapply(data.sub, function(x) { sum(is.na(x))} ))
+#select numric data
+sapply(data.sub, is.numeric)
+data_num <- data.sub[, sapply(data.sub, is.numeric)]
+
+#heatmap
+
+library(ggcorrplot)
+ggcorrplot(cor(data_num),
+           method = 'square',
+           type = 'lower',
+           show.diag = F,
+           colors = c('#e9a3c9', '#f7f7f7', '#a1d76a'))
+
+#check non numeric
+names(which(sapply(data.sub,class)=="character"))
+```
+
+
+ 
+
+```{r}
+#split data
+set.seed(1031)
+split = sample(1:nrow(data.sub),size = nrow(data.sub)*0.7)
+train.sub = data.sub[split,]
+test.sub = data.sub[-split,]
+
+```
+
+
+```{r}
+#Run randomForest determin importance features
+library(randomForest)
+set.seed(1031)
+rf<- randomForest(price~.,data=data.sub,importance=TRUE,type='regression',ntree=50)
+
+
+#select features
+
+
+importance_rf <- as.data.frame(rf$importance)
+importance_rf$`%IncMSE`
+features=rownames(importance_rf)[-length(importance_rf)]
+data_selected=data.sub[,c(features,'price')]
+summary(data_selected)
+```
+
+
+```{r}
+#Name importance feature
+x1 <- importance_rf[order(-importance_rf$`%IncMSE`),]
+nrow(x1)
+#top45
+features <- rownames(x1[1:45,])
+
+```
+
+
+```{r}
+library(randomForest)
+set.seed(1031)
+rf_selected <- randomForest(price~.,data=data_selected,importance=TRUE,type='regression',ntree=1000)
+pred = predict(rf_selected,newdata=test.sub)
+rmse_forest = sqrt(mean((pred-test.sub$price)^2)); rmse_forest
+
+```
+
+
+```{r}
+# Read scoring data and apply model to generate predictions
+scoringData = read.csv('scoringData.csv')
+scoringData.sub <- select(scoringData, -id,-name,-summary,-name,-space,-description,-neighborhood_overview,-notes,-transit,-access,-interaction,-house_rules,-host_name,-host_since,-host_has_profile_pic,-state,-market,-country,-country_code,-square_feet,-weekly_price,-monthly_price,-requires_license,-license,-jurisdiction_names,-require_guest_profile_picture,-require_guest_phone_verification,-host_location,-host_about,host_verifications,host_verifications,smart_location,-host_is_superhost,-is_business_travel_ready,host_verifications,host_identity_verified,-host_verifications,-host_identity_verified,-first_review,-last_review,-host_neighbourhood,-host_acceptance_rate,-first_review,-last_review,-has_availability,-bed_type,-is_location_exact,-smart_location,extra_people,-city,-street,-cancellation_policy)
+
+#Fill remaining NAs with medians.
+
+scoringData.sub$cleaning_fee[which(is.na(scoringData.sub$cleaning_fee))] = median(scoringData.sub$cleaning_fee,na.rm=T)
+scoringData.sub$beds[which(is.na(scoringData.sub$beds))] = median(scoringData.sub$beds,na.rm=T)
+scoringData.sub$security_deposit[which(is.na(scoringData.sub$security_deposit))] = median(scoringData.sub$security_deposit,na.rm=T)
+scoringData.sub$host_total_listings_count[which(is.na(scoringData.sub$host_total_listings_count))] = median(scoringData.sub$host_total_listings_count,na.rm=T)
+scoringData.sub$host_listings_count[which(is.na(scoringData.sub$host_listings_count))] = median(scoringData.sub$host_listings_count,na.rm=T)
+scoringData.sub$reviews_per_month[which(is.na(scoringData.sub$reviews_per_month))] = median(scoringData.sub$reviews_per_month,na.rm=T)
+
+```
+
+
+```{r}
+pred_score = predict(rf_selected,newdata=scoringData.sub)
+```
+
+```{r}
+# Construct submission from predictions
+submissionFile = data.frame(id = scoringData$id, price = pred_score)
+write.csv(submissionFile, 'randomForest_submission_aaa1.csv',row.names = F)
+```
+
